@@ -308,8 +308,6 @@ def get_yolo_boxes(photo_filename: str, yolov3, anchors: list, class_threshold, 
     return v_boxes, v_labels, v_scores
 
 def model_setup():
-	
-	photo_filename = "images/teste.jpg"
 
 	# define the anchors
 	anchors = [[116,90, 156,198, 373,326], [30,61, 62,45, 59,119], [10,13, 16,30, 33,23]]
@@ -325,11 +323,12 @@ def model_setup():
     # define the yolo v3 model
 	yolov3 = make_yolov3_model()
 
-	return photo_filename, yolov3, anchors, class_threshold, labels
+	return yolov3, anchors, class_threshold, labels
 
 def main():
+	photo_filename = "images/teste.jpg"
 	
-	photo_filename, yolov3, anchors, class_threshold, labels = model_setup()
+	yolov3, anchors, class_threshold, labels = model_setup()
 
     # get the details of the detected objects
 	v_boxes, v_labels, v_scores = get_yolo_boxes(photo_filename, yolov3, anchors, class_threshold, labels)
