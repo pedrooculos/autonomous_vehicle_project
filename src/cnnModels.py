@@ -1,14 +1,21 @@
 import numpy as np
 import struct
-from keras.layers import Input, Conv2D, BatchNormalization, LeakyReLU, ZeroPadding2D, UpSampling2D, concatenate, add
-from keras.models import Model
-from imageHandler import *
+import os
+from keras import backend as K
+from keras.models import load_model
+from src.imageHandler import *
 
 '''
 	This code was made using as base Natashia's code from: https://towardsdatascience.com/yolo-v3-object-detection-with-keras-461d2cfccef6
 '''
 
-class WeightReader:
+def swish(x, beta = 1):
+    return (x * K.sigmoid(beta * x))
+
+def logistic(x):
+    return K.sigmoid(x)
+
+""" class WeightReader:
 	def __init__(self, weight_file):
 		with open(weight_file, 'rb') as w_f:
 			major,	= struct.unpack('i', w_f.read(4))
@@ -151,7 +158,7 @@ def make_yolov3_model():
 							   {'filter': 45, 'kernel': 1, 'stride': 1, 'bnorm': False, 'leaky': False, 'layer_idx': 105}], skip=False)
 	model = Model(input_image, [yolo_82, yolo_94, yolo_106])
 	return model
-
+ """
 class BoundBox:
   def __init__(self, xmin, ymin, xmax, ymax, objness = None, classes = None):
     self.xmin = xmin
@@ -173,9 +180,6 @@ class BoundBox:
     if self.score == -1:
       self.score = self.classes[self.get_label()]
     return self.score
-
-def _sigmoid(x):
-  return 1. /(1. + np.exp(-x))
 
 def decode_netout(netout, anchors, obj_thresh, net_h, net_w):
 	grid_h, grid_w = netout.shape[:2]
@@ -271,15 +275,6 @@ def get_boxes(boxes, labels, thresh):
 	return v_boxes, v_labels, v_scores
 
 def get_yolo_boxes(photo_filename: str, yolov3, anchors: list, class_threshold, labels):
-    # load the weights
-    weight_reader = WeightReader('weights/yolov3.backup')
-
-    # set the weights
-    weight_reader.load_weights(yolov3)
-
-    # save the model to file
-    yolov3.save('models/yolov3_model.h5')
-
     # define the expected input shape for the model
     input_w, input_h = 416, 416
 
@@ -307,28 +302,52 @@ def get_yolo_boxes(photo_filename: str, yolov3, anchors: list, class_threshold, 
 
     return v_boxes, v_labels, v_scores
 
-def model_setup():
-
+def parametersInitialization():
 	# define the anchors
 	anchors = [[116,90, 156,198, 373,326], [30,61, 62,45, 59,119], [10,13, 16,30, 33,23]]
 
     # define the probability threshold for detected objects
-	class_threshold = 0.6
+	class_threshold = 0.5
 
 	print("started")
 
     # define the labels
 	labels = ["car","bus","person","bike","truck","motor","train","rider","traffic sign", "traffic light"]
+
+	return anchors, class_threshold, labels
+
+
+def yolov3_model_setup():
+	anchors, class_threshold, labels = parametersInitialization()
 	
     # define the yolo v3 model
 	yolov3 = make_yolov3_model()
 
+	# load the weights
+	weight_reader = WeightReader('weights/yolov3.backup')
+
+    # set the weights
+	weight_reader.load_weights(yolov3)
+
+    # save the model to file
+	yolov3.save('models/yolov3_model.h5')
+
 	return yolov3, anchors, class_threshold, labels
 
+def model_setup_h5(kerasModel: str):
+	anchors, class_threshold, labels = parametersInitialization()
+
+	model = load_model(kerasModel)
+
+	return model, anchors, class_threshold, labels
+
 def main():
-	photo_filename = "images/teste.jpg"
+	photo_filename = "data/images/b1c9c847-3bda4659.jpg"
 	
-	yolov3, anchors, class_threshold, labels = model_setup()
+	if(os.path.isfile('models/yolov7_model.h5')):
+		yolov3, anchors, class_threshold, labels = model_setup_h5('models/yolov7_model.h5')
+	else:
+		yolov3, anchors, class_threshold, labels = yolov3_model_setup()
 
     # get the details of the detected objects
 	v_boxes, v_labels, v_scores = get_yolo_boxes(photo_filename, yolov3, anchors, class_threshold, labels)
