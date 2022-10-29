@@ -25,23 +25,16 @@ def load_image_pixels(filename, shape):
   image = expand_dims(image, 0)
   return image, width, height
 
-def draw_lines_from_hough(image, lines):
-    if lines is not None:
-        for i in range(0, len(lines)):
-            rho = lines[i][0][0]
-            theta = lines[i][0][1]
-            a = math.cos(theta)
-            b = math.sin(theta)
-            x0 = a * rho
-            y0 = b * rho
-            pt1 = (int(x0 + 1000*(-b)), int(y0 + 1000*(a)))
-            pt2 = (int(x0 - 1000*(-b)), int(y0 - 1000*(a)))
-            cv.line(image, pt1, pt2, (0,0,255), 3, cv.LINE_AA)
-
-    return image
+def draw_lines_from_houghP(image, lines):
+	if lines is not None:
+		for line in lines:
+			pt1 = (line[0], line[1])
+			pt2 = (line[2], line[3])
+			cv.line(image, pt1, pt2, (0,0,255), 3, cv.LINE_AA)
 
 def plot_image(image):
-	pyplot.imshow(image, cmap = 'gray')
+	img_rgb = cv.cvtColor(image, cv.COLOR_BGR2RGB)
+	pyplot.imshow(img_rgb, cmap = 'gray')
 	pyplot.show()
 
 def split_image_vertical(image: cv.Mat, split_number: int):
