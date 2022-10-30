@@ -54,6 +54,16 @@ def merge_image_vertical(image_slices: array):
 
 	return image
 
+def create_image_for_test(image_source, lines):
+
+    image_slices = split_image_vertical(image_source, len(lines))
+
+    for i in range(len(image_slices)):
+        draw_lines_from_houghP(image_slices[i], lines[i])
+    
+    image = merge_image_vertical(image_slices)
+    plot_image(image)
+
 
 # draw all results
 def draw_boxes(filename, v_boxes, v_labels, v_scores):
