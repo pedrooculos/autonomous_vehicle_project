@@ -23,7 +23,7 @@ def line_intersection(line1, line2):
 
 
 # Implementation based in seancyw`s implementation: https://github.com/seancyw/bsnake_lane_detection
-def run_bSnake(imagePath: str, min_threshold_canny=50, max_threshold_canny=150, process_slices=5, hough_threshold=50):
+def run_bSnake(imagePath: str, min_threshold_canny=50, max_threshold_canny=75, process_slices=7, hough_threshold=15):
     
     def find_lines(edges_slices: list, hough_threshold: int, min_line_length=5, max_line_gap=50):
         lines = []
@@ -74,6 +74,12 @@ def run_bSnake(imagePath: str, min_threshold_canny=50, max_threshold_canny=150, 
         #print("The voting result was: " + str(vanish_row) + " With: " + str(max_votes) + " votes")
         return vanish_row
 
+    def remove_lines_out_of_road(lines, slice_size, vanish_row):
+        for i in range(len(lines)):
+            if (vanish_row > slice_size*i):
+                lines[i] = []
+        return lines
+
     def find_lanes_lines(lines: list, slice_size: int, vanish_row: int):
         lane_lines = []
         image_height=0
@@ -95,6 +101,31 @@ def run_bSnake(imagePath: str, min_threshold_canny=50, max_threshold_canny=150, 
             image_height+=slice_size
             lane_lines.append(lane_lines_slice)
         return lane_lines 
+
+    def find_middle_lane(lines):
+        center_lanes = []
+        for slice in lines:
+            if len(slice) == 0:
+                center_lanes.append(slice)
+                continue
+            right_lanes = []; left_lanes = []
+            for line in slice:
+                try:
+                    slope = (line[3] - line[1])/(line[2] - line[0])
+                    if (slope > 0):
+                        right_lanes.append(line)
+                    else:
+                        left_lanes.append(line)
+                except:
+                    print("Error: This is a vertical line!!!")
+
+            right_lanes = sorted(right_lanes, key=itemgetter(3))
+            left_lanes = sorted(left_lanes, key=itemgetter(3), reverse=True)         
+
+            center_lane = [right_lanes[0], left_lanes[0]]
+            center_lanes.append(center_lane)
+
+        return center_lanes
 
     def find_control_points(lane_lines: list, slice_size: int, image_center: int):
         def find_center_lines(lines):
@@ -150,18 +181,37 @@ def run_bSnake(imagePath: str, min_threshold_canny=50, max_threshold_canny=150, 
     edges_slices = imageHandler.split_image_vertical(edges, process_slices)
 
     lines = find_lines(edges_slices, hough_threshold)
-    imageHandler.create_image_for_test(image, lines)
+    #imageHandler.create_image_for_test(image, lines)
     
     slice_size = round(image.shape[0]/process_slices)
     vanish_row = find_vanish_row(lines, slice_size)
+
+    lines = remove_lines_out_of_road(lines, slice_size, vanish_row)
     
     lane_lines = find_lanes_lines(lines, slice_size, vanish_row)
     imageHandler.create_image_for_test(image, lane_lines)
-    
-    find_control_points(lane_lines, slice_size, image_center=int(image.shape[0]/2))
-    #imageHandler.create_image_for_test(image, lane_lines)
 
-    calculate_spline()
+    # center_lanes = find_middle_lane(lane_lines)
+    # print(center_lanes)
+    # imageHandler.create_image_for_test(image, center_lanes)
+    
+    # control_points = find_control_points(lane_lines, slice_size, image_center=int(image.shape[0]/2))
+
+    # x = []
+    # y = []
+    # for point in control_points:
+    #     x.append(point[0])
+    #     y.append(point[1])
+
+    # imageHandler.draw_images_from_points(image, x, y)
+
+    # spline_function = calculate_spline(control_points)
+
+    # x = list(range(0, image.shape[1]))
+
+    # y = spline_function(x)
+
+    # imageHandler.draw_images_from_points(image, x, y)
 
 if __name__ == '__main__':
     start_time = time.time()
