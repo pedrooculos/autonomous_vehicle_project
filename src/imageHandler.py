@@ -64,6 +64,22 @@ def create_image_for_test(image_source, lines):
     image = merge_image_vertical(image_slices)
     plot_image(image)
 
+def mark_points_for_test(image_source, points):
+	for point in points:
+		mark = (int(point[0]), int(point[1]))
+		image_source = cv.circle(image_source, mark, radius=0, color=(0,0,255), thickness=10)	
+		
+	plot_image(image_source)
+
+def draw_images_from_points(image, x,y):
+
+	print(x)
+	print(y)
+	pyplot.imshow(image)
+	pyplot.scatter(x[:],y[:], color='red')
+
+	pyplot.show()
+
 
 # draw all results
 def draw_boxes(filename, v_boxes, v_labels, v_scores):
