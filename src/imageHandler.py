@@ -71,6 +71,25 @@ def mark_points_for_test(image_source, points):
 		
 	plot_image(image_source)
 
+
+def mark_lane_contours(image_source, points, k, vanish_row):
+	for point in points:
+		coord_x = int(point[0])
+		coord_y = int(point[1])
+
+		d = (k*(coord_y - vanish_row))/2
+
+		c_right = int(coord_x + d)
+		c_left = int(coord_y - d)
+
+
+		mark_right = (int(c_right), int(coord_y))
+		mark_left = (int(c_left), int(coord_y))
+		image_source = cv.circle(image_source, mark_right, radius=0, color=(0,0,255), thickness=10)
+		image_source = cv.circle(image_source, mark_left, radius=0, color=(0,0,255), thickness=10)
+		
+	plot_image(image_source)
+
 def draw_images_from_points(image, x,y):
 
 	print(x)
@@ -80,6 +99,37 @@ def draw_images_from_points(image, x,y):
 
 	pyplot.show()
 
+
+def plot_gvf_images(img, edge, fx, fy, gx, gy):
+	def plot_vector_field(ax, vx, vy):
+		scale = np.sqrt(np.max(vx**2+vy**2))*20.0
+		ax.imshow(img, cmap='gray')
+        # vy shold be inversed (top=+Y -> top=-Y)
+		ax.quiver(X, Y, vx[Y, X], -vy[Y, X], scale=scale, color='blue', headwidth=5)
+    
+	def vmin(values): return -max(values.max(), -values.min())
+    
+	def vmax(values): return max(values.max(), -values.min())
+
+	H, W = img.shape	
+	Y, X = np.meshgrid(range(0, H, 5), range(0, W, 5))
+	fig, axs = pyplot.subplots(2, 4, figsize=(16, 8))
+	fig.suptitle('Gradient Vector Flow (2D) demo')
+	ax = axs[0][0]; ax.imshow(img, cmap='gray'); ax.set_title('org');ax.set_axis_off()
+	ax = axs[0][1]; ax.imshow(edge[:, :], cmap='gray'); ax.set_title('edge');ax.set_axis_off()
+	ax = axs[0][2]; ax.imshow(fx, vmin=vmin(fx), vmax=vmax(fx), cmap='seismic'); ax.set_title('fx');ax.set_axis_off()
+	ax = axs[0][3]; ax.imshow(fy, vmin=vmin(fx), vmax=vmax(fx), cmap='seismic'); ax.set_title('fy');ax.set_axis_off()
+	ax = axs[1][0]; ax.imshow(gx, vmin=vmin(gx), vmax=vmax(gx), cmap='seismic'); ax.set_title('GVFx');ax.set_axis_off()
+	ax = axs[1][1]; ax.imshow(gy, vmin=vmin(gy), vmax=vmax(gy), cmap='seismic'); ax.set_title('GVFy');ax.set_axis_off()
+	ax = axs[1][2]; plot_vector_field(ax, fx, fy); ax.set_title('f');ax.set_axis_off()
+	ax = axs[1][3]; plot_vector_field(ax, gx, gy); ax.set_title('GVF');ax.set_axis_off()
+	fig.tight_layout()
+	fig, axs = pyplot.subplots(1, 2, figsize=(16, 9))
+	fig.suptitle('Gradient Vector Flow (2D) demo')
+	ax = axs[0]; plot_vector_field(ax, fx, fy); ax.set_title('f');ax.set_axis_off()
+	ax = axs[1]; plot_vector_field(ax, gx, gy); ax.set_title('GVF');ax.set_axis_off()
+	fig.tight_layout()
+	pyplot.show()
 
 # draw all results
 def draw_boxes(filename, v_boxes, v_labels, v_scores):
