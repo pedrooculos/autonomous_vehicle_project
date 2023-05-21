@@ -265,7 +265,7 @@ class Bsnake:
             
         return bsnake
 
-    def create_spline(self, control_points: list):
+    def __create_spline(self, control_points: list):
         control_points = np.array(control_points)
         xp = control_points[:, 0]
         yp = control_points[:, 1]
@@ -293,7 +293,7 @@ class Bsnake:
         points = self.__find_path_points(image_shape, slice_size, center_lane_lines, vanish_row)
         control_points = self.__find_control_points(points)
 
-        bsnake = self.create_spline(control_points)
+        bsnake = self.__create_spline(control_points)
 
         bsnake = self.__apply_gvf_minimization(image, bsnake, k, vanish_row)
 
@@ -308,22 +308,16 @@ def line_intersection(line1, line2):
 
     div = det(xdiff, ydiff)
     if div == 0:
-       raise Exception('lines do not intersect')
+       raise Exception("Lines don't intersect!")
 
     d = (det(line1[:2], line1[2:]), det(line2[:2], line2[2:]))
     x = det(d, xdiff) / div
     y = det(d, ydiff) / div
-    return x, y
-
-def create_image_sections(image_height: int, number_of_sections: int):
-    value = int(image_height/(number_of_sections**2))
-    sections = []
-    for i in range(number_of_sections):
-        sections.append(value*i)        
+    return x, y    
 
 
 def test_bSnake():
-    image_path = '/home/pedro/repos/autonomous_vehicle_project/data/teste.jpg'
+    image_path = '/home/pedro/repos/autonomous_vehicle_project/src/test_images/teste.jpg'
     
     image = cv.imread(image_path)
 
