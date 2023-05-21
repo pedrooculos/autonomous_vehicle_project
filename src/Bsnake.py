@@ -5,19 +5,26 @@ import time
 import utils.houghBundler as houghBundler
 import utils.gvf as gvf
 import utils.spline as spline
-from scipy import interpolate
 import math
 from operator import itemgetter
 
 class Bsnake:
-    def __init__(self) -> None:
-        self.min_threshold_canny = 50
-        self.max_threshold_canny = 100
-        self.process_slices = 15
-        self.hough_threshold = 15
-        self.min_line_length = 10
-        self.max_line_gap = 20
-        self.median_blur_ksize = 9
+    def __init__(self, min_threshold_canny, max_threshold_canny,
+                 process_slices, hough_threshold, min_line_length,
+                 max_line_gap, median_blur_ksize) -> None:
+        
+        self.min_threshold_canny = min_threshold_canny
+        self.max_threshold_canny = max_threshold_canny
+        self.process_slices = process_slices
+        self.hough_threshold = hough_threshold
+        self.min_line_length = min_line_length
+        self.max_line_gap = max_line_gap
+        self.median_blur_ksize = median_blur_ksize     
+        
+    @classmethod
+    def init_default(cls):
+        bsnake = Bsnake(50, 100, 15, 15, 10, 20, 9)
+        return bsnake
 
     def __find_lines(self, edges_slices: list):
         lines = []
@@ -320,7 +327,7 @@ def test_bSnake():
     
     image = cv.imread(image_path)
 
-    bsnake = Bsnake()
+    bsnake = Bsnake.init_default()
     bsnake_result = bsnake.run(image)  
 
     imageHandler.mark_points_for_test(image, bsnake_result)
