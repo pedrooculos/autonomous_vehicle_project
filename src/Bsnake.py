@@ -4,92 +4,26 @@ import numpy as np
 import time
 import utils.houghBundler as houghBundler
 import utils.gvf as gvf
+import utils.spline as spline
 from scipy import interpolate
-from scipy.special import binom
 import math
 from operator import itemgetter
 
-def line_intersection(line1, line2):
-    xdiff = (line1[0] - line1[2], line2[0] - line2[2])
-    ydiff = (line1[1] - line1[3], line2[1] - line2[3])
+class Bsnake:
+    def __init__(self) -> None:
+        self.min_threshold_canny = 50
+        self.max_threshold_canny = 100
+        self.process_slices = 15
+        self.hough_threshold = 15
+        self.min_line_length = 10
+        self.max_line_gap = 20
+        self.median_blur_ksize = 9
 
-    def det(a, b):
-        return a[0] * b[1] - a[1] * b[0]
-
-    div = det(xdiff, ydiff)
-    if div == 0:
-       raise Exception('lines do not intersect')
-
-    d = (det(line1[:2], line1[2:]), det(line2[:2], line2[2:]))
-    x = det(d, xdiff) / div
-    y = det(d, ydiff) / div
-    return x, y
-
-def create_image_sections(image_height: int, number_of_sections: int):
-    value = int(image_height/(number_of_sections**2))
-    sections = []
-    for i in range(number_of_sections):
-        sections.append(value*i)
-
-def create_bezier(control_points):
-            # Code based in https://gist.github.com/astrojuanlu/7284462
-    def Bernstein(n, k):
-        """Bernstein polynomial.
-        """
-        coeff = binom(n, k)
-
-        def _bpoly(x):
-            return coeff * x ** k * (1 - x) ** (n - k)
-
-        return _bpoly
-
-    def Bezier(points, num=20):
-        """Build Bézier curve from points.
-        """
-        N = len(points)
-        t = np.linspace(0, 1, num=num)
-        curve = np.zeros((num, 2))
-        for ii in range(N):
-            curve += np.outer(Bernstein(N - 1, ii)(t), points[ii])
-        return curve
-
-    control_points = np.array(control_points)
-    xp = control_points[:, 0]
-    yp = control_points[:, 1]
-
-    x, y = Bezier(list(zip(xp, yp))).T
-
-    bezier = [ [x[i], y[i]]  for i in range(len(x))]
-    
-    return bezier        
-
-def create_BSpline(control_points, num=100):
-    points = np.array(control_points)
-
-    x = points[:,0]
-    y = points[:,1]
-
-    degree = min(len(points), 3)
-    
-    t, c, k = interpolate.splrep(y, x, s=10, k=degree)
-
-    spline = interpolate.BSpline(t, c, k, extrapolate=False)
-
-    y_new = np.linspace(y.min(), y.max(), num)
-    x_new = spline(y_new)
-    
-    bsnake = np.dstack((x_new,y_new))
-
-    return bsnake[0]
-
-
-# Implementation based in seancyw`s implementation: https://github.com/seancyw/bsnake_lane_detection
-def run_bSnake(image, min_threshold_canny=50, max_threshold_canny=100, process_slices=15, hough_threshold=15):
-    
-    def find_lines(edges_slices: list, hough_threshold: int, min_line_length=10, max_line_gap=20):
+    def __find_lines(self, edges_slices: list):
         lines = []
         for i in range(len(edges_slices)):
-            hough_result = cv.HoughLinesP(edges_slices[i], 1, np.pi/180, hough_threshold, minLineLength=min_line_length, maxLineGap=max_line_gap)
+            hough_result = cv.HoughLinesP(edges_slices[i], 1, np.pi/180, self.hough_threshold, 
+                                          minLineLength=self.min_line_length, maxLineGap=self.max_line_gap)
             
             line_seg=[]
             if hough_result is not None:
@@ -97,15 +31,15 @@ def run_bSnake(image, min_threshold_canny=50, max_threshold_canny=100, process_s
                     if ((hough_result[j][0][2] - hough_result[j][0][0]) == 0):
                         line_seg.append(hough_result[j][0])
                     else:
-                        m = (hough_result[j][0][3] - hough_result[j][0][1])/(hough_result[j][0][2] - hough_result[j][0][0]) # Line angle in rad
+                        m = (hough_result[j][0][3] - hough_result[j][0][1])/(hough_result[j][0][2] - hough_result[j][0][0])
 
                         if not (-0.2<m<0.2):
                             line_seg.append(hough_result[j][0])
 
             lines.append(line_seg)
         return lines
-
-    def find_vanish_row(lines: list, slice_size):
+    
+    def __find_vanish_row(self, lines: list, slice_size: int):
         vanish_votes = {}
         image_height = 0 
         for slice in range(len(lines)):
@@ -132,10 +66,9 @@ def run_bSnake(image, min_threshold_canny=50, max_threshold_canny=100, process_s
                 max_voted = key
 
         vanish_row = int(max_voted)*10
-        #print("The voting result was: " + str(vanish_row) + " With: " + str(max_votes) + " votes")
         return vanish_row
-
-    def find_center_lane_marks(lines: list, slice_size: int, vanish_row: int, image_center_x):
+    
+    def __find_center_lane_marks(self, lines: list, slice_size: int, vanish_row: int, image_center_x: int):
         def remove_lines_out_of_road(lines, slice_size, vanish_row):
             for i in range(len(lines)):
                 if (vanish_row > slice_size*i):
@@ -207,9 +140,8 @@ def run_bSnake(image, min_threshold_canny=50, max_threshold_canny=100, process_s
                 center_lanes.append([right_lane, left_lane])
 
         return center_lanes
-
-    def estimate_k(lines, vanish_row):
-
+    
+    def __estimate_k(self, lines: list, vanish_row: int):
         for slice in lines:
             if len(slice) >= 2:
                 line_1 = slice[1]
@@ -229,8 +161,8 @@ def run_bSnake(image, min_threshold_canny=50, max_threshold_canny=100, process_s
                 return k 
 
         return 0
-
-    def find_path_points(image_shape, slice_size, lines, vanish_row):
+    
+    def __find_path_points(self, image_shape: tuple, slice_size: int, lines: list, vanish_row: int):
         points = []
         points.append([image_shape[1]/2,image_shape[0] -1])
         
@@ -253,8 +185,8 @@ def run_bSnake(image, min_threshold_canny=50, max_threshold_canny=100, process_s
                 heigth -= slice_size
 
         return points
-
-    def find_control_points(points):
+    
+    def __find_control_points(self, points: list):
         Q0 = points[-1]
         Q2 = points[0]
 
@@ -277,8 +209,8 @@ def run_bSnake(image, min_threshold_canny=50, max_threshold_canny=100, process_s
         control_points = [Q0, Q1, Q2]
     
         return control_points 
-
-    def apply_gvf_minimization(image, bsnake, k, vanish_row):
+    
+    def __apply_gvf_minimization(self, image: cv.Mat, bsnake: np.ndarray, k: float, vanish_row: int):
 
         _, edge = gvf.prepare_img_for_gvf(image, sigma=2)
 
@@ -326,56 +258,70 @@ def run_bSnake(image, min_threshold_canny=50, max_threshold_canny=100, process_s
             
         return bsnake
 
+    def create_spline(self, control_points: list):
+        control_points = np.array(control_points)
+        xp = control_points[:, 0]
+        yp = control_points[:, 1]
 
-    blured_img = cv.medianBlur(image, 9)
-    edges = cv.Canny(blured_img, min_threshold_canny, max_threshold_canny)
+        x, y = spline.Bezier(list(zip(xp, yp))).T
 
-    edges_slices = imageHandler.split_image_vertical(edges, process_slices)
-    lines = find_lines(edges_slices, hough_threshold)
-    
-    slice_size = round(image.shape[0]/process_slices)
-    vanish_row = find_vanish_row(lines, slice_size)
+        bezier = [ [x[i], y[i]]  for i in range(len(x))]
+        
+        return bezier
 
-    center_lane_lines = find_center_lane_marks(lines, slice_size, vanish_row, image.shape[1]/2)
+    def run(self, image: cv.Mat):
 
-    k = estimate_k(center_lane_lines, vanish_row)
+        image_shape = image.shape
+        slice_size = round(image_shape[0]/self.process_slices)
+        image_center_x = image_shape[1]/2
 
-    points = find_path_points(image.shape, slice_size, center_lane_lines, vanish_row)
-    
-    control_points = find_control_points(points)
+        blured_img = cv.medianBlur(image, self.median_blur_ksize)
+        edges = cv.Canny(blured_img, self.min_threshold_canny, self.max_threshold_canny)
+        edges_slices = imageHandler.split_image_vertical(edges, self.process_slices)
 
-    bsnake = create_bezier(control_points)
+        lines = self.__find_lines(edges_slices)
+        vanish_row = self.__find_vanish_row(lines, slice_size)
+        center_lane_lines = self.__find_center_lane_marks(lines, slice_size, vanish_row, image_center_x)
+        k = self.__estimate_k(center_lane_lines, vanish_row)
+        points = self.__find_path_points(image_shape, slice_size, center_lane_lines, vanish_row)
+        control_points = self.__find_control_points(points)
 
-    bsnake = apply_gvf_minimization(image, bsnake, k, vanish_row)
+        bsnake = self.create_spline(control_points)
 
-    return bsnake
+        bsnake = self.__apply_gvf_minimization(image, bsnake, k, vanish_row)
+
+        return bsnake
+
+def line_intersection(line1, line2):
+    xdiff = (line1[0] - line1[2], line2[0] - line2[2])
+    ydiff = (line1[1] - line1[3], line2[1] - line2[3])
+
+    def det(a, b):
+        return a[0] * b[1] - a[1] * b[0]
+
+    div = det(xdiff, ydiff)
+    if div == 0:
+       raise Exception('lines do not intersect')
+
+    d = (det(line1[:2], line1[2:]), det(line2[:2], line2[2:]))
+    x = det(d, xdiff) / div
+    y = det(d, ydiff) / div
+    return x, y
+
+def create_image_sections(image_height: int, number_of_sections: int):
+    value = int(image_height/(number_of_sections**2))
+    sections = []
+    for i in range(number_of_sections):
+        sections.append(value*i)        
+
 
 def test_bSnake():
-    image_number = 5
-    match image_number:
-        case 1:
-            image_path = '/home/pedro/repos/autonomous_vehicle_project/data/images/test/cabc30fc-eb673c5a.jpg'
-        case 2:
-            image_path = '/home/pedro/repos/autonomous_vehicle_project/data_teste/images/b1c81faa-c80764c5.jpg'
-        case 3:
-            image_path = '/home/pedro/repos/autonomous_vehicle_project/data/images/test/cb86b1d9-7735472c.jpg'
-        case 4:
-            image_path = '/home/pedro/repos/autonomous_vehicle_project/data/images/test/caee33ed-136d6b7c.jpg'
-        case 5:
-            image_path = '/home/pedro/repos/autonomous_vehicle_project/data/images/test/cbd35eab-7eacd236.jpg'
-        case 6:
-            image_path = '/home/pedro/repos/autonomous_vehicle_project/data_teste/images/teste.jpg'
-        case 7:
-            image_path = '/home/pedro/repos/autonomous_vehicle_project/data/images/test/cc599c2f-daa3587e.jpg'
-        case 8:
-            image_path = '/home/pedro/repos/autonomous_vehicle_project/data/images/test/ccb961b6-66bd00c0.jpg'
-        case 9:
-            image_path = '/home/pedro/repos/autonomous_vehicle_project/data/images/test/cd75d282-a85a83e1.jpg'
-        case _:
-            "Passar uma imagem por favor!!!"
+    image_path = '/home/pedro/repos/autonomous_vehicle_project/data/teste.jpg'
     
     image = cv.imread(image_path)
-    bsnake_result = run_bSnake(image)  
+
+    bsnake = Bsnake()
+    bsnake_result = bsnake.run(image)  
 
     imageHandler.mark_points_for_test(image, bsnake_result)
 
